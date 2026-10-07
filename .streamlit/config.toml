@@ -1,0 +1,32 @@
+[browser]
+gatherUsageStats = false
+
+# Paradime branding, as in the Paradime app's component library
+# (paradime-frontend packages/paradime-component-library): Geist for headings and
+# text, Geist Mono for code, and the violet scale (primary violet-600, #726ae3)
+# for accents. Light and dark both stay available; viewers follow their system
+# setting. Chart colors are set in analyst/charts.py, the logo and the avatar in
+# app.py (assets/).
+[theme]
+font = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap, sans-serif"
+codeFont = "Geist Mono:https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap, monospace"
+
+# One step darker than violet-600 (#635ae0), for white button text at 5.2:1.
+# Links in #5951c9, 6.1:1 on white.
+[theme.light]
+primaryColor = "#635ae0"
+linkColor = "#5951c9"
+# Streamlit's "violet" (badges, :violet[] text) becomes the brand violet: 5.9:1 in a badge.
+violetColor = "#635ae0"
+violetBackgroundColor = "#e8e7fa"
+violetTextColor = "#4f48b3"
+
+# violet-600, the app's primary: white text at 4.3:1, and 4.4:1 against the
+# dark background. Links in #a19cec, 7.6:1 on the dark background.
+[theme.dark]
+primaryColor = "#726ae3"
+linkColor = "#a19cec"
+violetColor = "#827be6"
+violetBackgroundColor = "#29254f"
+violetTextColor = "#c0bdf2"
