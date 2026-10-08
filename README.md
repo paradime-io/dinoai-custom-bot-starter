@@ -9,6 +9,7 @@ This repository is also a guide. It shows how to set up a bot like this one end 
 ## What it does
 
 - **Answers with evidence.** Each answer has charts, KPI tiles or tables. Each chart has a **Chart** tab, a **Data** tab with the rows (and a CSV download), and a **SQL** tab with the query.
+- **Live progress.** While the agent works, a status box lists each of its steps as they happen: catalog searches, model reads, SQL queries.
 - **Conversations.** Follow-up questions go to the same agent session, so the agent keeps the context. Conversations are saved, and each has a link that you can share. The **History** page lists them all, and a conversation downloads as Markdown.
 - **Report a problem.** A reader can report a wrong answer. The analyst agent hands the report to a second agent (an agent squad), which files a Linear issue and assigns it. The issue link comes back into the chat.
 - **Demo mode.** Without credentials, the app replays recorded answers, so you can try it in two minutes.

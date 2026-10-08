@@ -69,12 +69,19 @@ def main() -> int:
         print("\nParadime access")
         try:
             backend = live_backend(secrets)
-            backend.get(uuid.uuid4().hex[:16])  # a session that does not exist
+            backend.get(uuid.uuid4().hex[:16])  # a session that does not exist, with its steps
             report(False, "Paradime returned a session that should not exist.")
         except ValueError as exc:  # the SDK checks the credential combination
             report(False, f"The credentials are incomplete: {exc}")
         except BackendError as exc:
             report(*diagnose(str(exc)))
+            # A "not found" comes after the API accepted the query, steps included. An API
+            # without steps refuses the field first, and the backend then reads the plain run.
+            if backend.steps_supported is False:
+                print("  NOTE  This Paradime environment does not serve agent steps yet: while the agent\n"
+                      "        works, the app shows a timer and the agent's own progress messages.")
+            else:
+                report(True, "The API serves agent steps: the app shows each tool call while the agent works.")
             identity = backend.key_identity()
             if identity:
                 capabilities = identity.get("capabilities") or []

@@ -43,6 +43,9 @@ Expected output, at the end:
 ```text
 Paradime access
   PASS  The key, the workspace and the agents API work.
+  PASS  The API serves agent steps: the app shows each tool call while the agent works.
+  PASS  The key can start and read agent runs (capabilities: dinoai:agent:read, dinoai:agent:trigger, self)
+  NOTE  The key expires on 2030-06-10.
 
 Report a problem
   PASS  The analyst hands reports to 'analytics-fe-98e818'.
@@ -61,17 +64,25 @@ python scripts/smoke_test.py
 python scripts/smoke_test.py --question "How many races did Red Bull win in 2023? Show it as a metric."
 ```
 
-The script sends one question to `DINOAI_AGENT`, with the same opening message as the app. It waits for the answer, then checks that the answer follows the response format: Markdown with at least one `viz` block that the app can draw. It takes 1 to 2 minutes, most of it for the agent pod to start.
+The script sends one question to `DINOAI_AGENT`, with the same opening message as the app. It prints the agent's steps as they come (when your Paradime environment serves them), waits for the answer, then checks that the answer follows the response format: Markdown with at least one `viz` block that the app can draw. It takes 1 to 2 minutes, most of it for the agent pod to start.
 
 Expected output:
 
 ```text
-1. Question to stakeholder-5029ee: How many races did each constructor win in 2023? Show it as a bar chart.
-   DinoAI session lj6arfghat5qjvub
-   Answered in 56s: 1 visual(s), 0 unreadable
+1. Question to stakeholder-5029ee: How many races did Red Bull win in 2023? Show it as a metric.
+   DinoAI session cdadkuvwb5f4bk9r
+       12s  Searching the catalog for race results models
+       22s  Searched the data catalog: race results wins constructor
+       22s  Listed the mart models
+       24s  Read a model's details: model.analytics.fct_f1__constructor_wins
+       ...
+       36s  Ran a SQL query: SELECT COUNT(*) AS wins FROM `dbt-demo-project.dbt_prod.fct_f1__constructor_wins` W
+       49s  Ran a SQL query: SELECT race_name, constructor_name, driver_full_name FROM `dbt-demo-project.dbt_pro
+   Answered in 52s: 2 visual(s), 0 unreadable
+     - metrics: Red Bull wins in 2023
      - bar: Race wins by constructor, 2023
 PASS  The agent answered in the app's format.
-      Open it in the app: http://localhost:8501/?thread=lj6arfghat5qjvub
+      Open it in the app: http://localhost:8501/?thread=cdadkuvwb5f4bk9r
 ```
 
 Open the link with the app running to see the answer as a stakeholder sees it. You can also read the session in Paradime: every tool call of the agent is in its transcript.

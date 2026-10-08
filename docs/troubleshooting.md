@@ -36,9 +36,9 @@ The agent pod stops after a period without activity: up to 24 hours according to
 
 The first question in a conversation waits for the agent pod to start (about 17 seconds). See [How it works: Where the time goes](how-it-works.md#where-the-time-goes) for the options: a faster model family (`DINOAI_MODEL_FAMILY`), more context in `ANALYST_CONTEXT`, or a warm pod.
 
-### The progress line shows only a timer, not the agent's tool calls
+### The status box shows only a timer, not the agent's tool calls
 
-Your Paradime environment does not serve the `steps` field of `dinoaiAgentRun` yet. Until it does, the app falls back to the agent's own progress messages, which the agent does not always post. When a Paradime release adds the field to your environment, the app starts to use it without a change.
+Your Paradime environment does not serve the `steps` field of `dinoaiAgentRun` yet: `python scripts/check_setup.py` says so. Until it does, the app falls back to the agent's own progress messages, which the agent does not always post. When a Paradime release adds the field to your environment, restart the app: it then lists each tool call.
 
 ### An answer shows the raw JSON of a chart with a warning
 

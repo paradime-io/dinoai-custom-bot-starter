@@ -17,7 +17,8 @@ def test_a_sql_call_shows_its_query_even_when_the_input_was_cut():
 def test_known_unknown_and_hidden_tools():
     assert describe(tool("search_catalog", '{"query": "race results"}')) == "Searched the data catalog: race results"
     assert describe(tool("get_mart_models")) == "Listed the mart models"
-    assert describe(tool("list_all_bigquery_projects_and_datasets")) == "List all bigquery projects and datasets"
+    assert describe(tool("list_all_bigquery_projects_and_datasets")) == "Listed the BigQuery datasets"
+    assert describe(tool("summarize_freshness")) == "Summarize freshness"  # a tool without a label
     assert describe(tool("send_api_message", '{"message": "the answer"}')) is None
 
 
@@ -33,3 +34,13 @@ def test_a_turn_only_sees_steps_after_its_question():
     turn = PendingTurn("s1", "q2", baseline=1, sent_at=0.0, first_turn=False, step_baseline=3)
     run = RunSnapshot("RUNNING", [], steps=[AgentStep(i, r) for i, r in enumerate(["user", "tool", "agent", "tool", "user", "tool"])])
     assert [s.index for s in turn_steps(turn, run)] == [5]
+
+
+def test_warehouse_metadata_tools_get_plain_labels():
+    from analyst.backend import AgentStep
+    from analyst.steps import describe
+
+    step = AgentStep(index=3, role="tool", tool_name="list_all_tables_in_bigquery_dataset",
+                     tool_input='{\n  "project_name": "dbt-demo-project",\n  "dataset_name": "dbt_prod"\n}')
+
+    assert describe(step) == "Listed the tables in a dataset: dbt_prod"

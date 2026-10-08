@@ -52,7 +52,7 @@ Rules that worked for us:
 ### With the Python SDK
 
 ```bash
-pip install "paradime-io>=6.7"
+pip install "paradime-io>=6.8"
 ```
 
 ```python
@@ -71,8 +71,15 @@ started = agents.trigger_run(agent="support-triage", message="How many tickets d
 session_id = started.agent_session_id
 
 # Read the run until it finishes. A run is QUEUED while its pod starts, then RUNNING.
+# Each read also returns the agent's new steps: its tool calls and its notes.
+seen = -1
 while True:
-    run = agents.get_run(agent_session_id=session_id)
+    run = agents.get_run(
+        agent_session_id=session_id, include_steps=True, include_tool_io=True, max_chars=200, steps_after=seen
+    )
+    for step in run.steps or []:
+        print(step.role, step.tool_name or "", (step.tool_input or step.content or "")[:80])
+        seen = max(seen, step.index)
     if run.status.value in ("COMPLETED", "FAILED", "EXPIRED", "STOPPED"):
         break
     time.sleep(2)
@@ -118,7 +125,7 @@ What the API gives you, and what it does not:
 
 - **Messages arrive complete.** There is no streaming and no subscription: read the run in a loop. One read takes about 0.3 seconds, so a 1-second loop is fine.
 - **The transcript has the agent's messages, not yours.** Keep your own record of what you sent.
-- **Tool calls are not in the documented API yet.** Newer Paradime releases add a `steps` field: `dinoaiAgentRun { steps(after: Int, includeToolIo: Boolean, maxChars: Int) { index role toolName toolInput content truncated } }`. Until your environment has it, ask the agent to post a short line before each tool call if you want progress updates.
+- **Tool calls are in the run's steps.** `get_run(agent_session_id=..., include_steps=True, steps_after=...)` (paradime-io 6.8 or later) returns each step of the agent: its role (`USER`, `AGENT`, `TOOL`), the tool's name, and, with `include_tool_io=True`, the tool's input and output, capped by `max_chars`. Use `steps_after` with the highest index you have seen, to get only new steps. A Paradime environment that does not have the field yet refuses the query: read the plain run there, and ask the agent to post a short line before each tool call.
 - **A busy session queues messages.** A message sent while the agent works is picked up when the current turn finishes.
 - **API runs are unattended.** The agent does not stop to ask questions or wait in plan mode.
 

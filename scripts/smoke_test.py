@@ -36,7 +36,7 @@ def wait(backend, turn: PendingTurn, timeout: float) -> RunSnapshot:
     """Poll until the turn ends, printing the agent's steps as they come."""
     seen: set[int] = set()
     while True:
-        snapshot = backend.get(turn.session_id)
+        snapshot = backend.get(turn.session_id, steps_after=turn.step_baseline)
         done = observe(turn, snapshot, time.time())
         for step in turn_steps(turn, snapshot):
             if step.index not in seen:
@@ -132,7 +132,7 @@ def main() -> int:
     # 3. The feedback agent files the issue and calls back; the analyst posts the link.
     print("3. Waiting for the Linear issue link (usually a few minutes)...")
     while time.time() - sent_at < args.timeout:
-        snapshot = backend.get(session_id)
+        snapshot = backend.get(session_id, with_steps=False)
         for item in snapshot.messages[len(before.messages):]:
             issue = find_issue(item.content)
             if issue:

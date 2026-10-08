@@ -27,6 +27,13 @@ _TOOL_LABELS = {
     "todo_write": "Planned the steps",
     "load_skill_instructions": "Loaded a skill",
     "run_subagent": "Ran a sub-task",
+    "list_all_bigquery_projects_and_datasets": "Listed the BigQuery datasets",
+    "list_all_tables_in_bigquery_dataset": "Listed the tables in a dataset",
+    "list_all_columns_in_bigquery_table": "Read a table's columns",
+    "list_all_snowflake_databases": "Listed the Snowflake databases",
+    "list_all_schemas_in_snowflake_database": "Listed the schemas in a database",
+    "list_all_tables_in_snowflake_schema": "Listed the tables in a schema",
+    "list_all_columns_in_snowflake_table": "Read a table's columns",
     "invoke_agent": "Handed the work to another agent",
     "check_delegated_agents": "Checked on the other agent",
 }
@@ -35,6 +42,7 @@ _HIDDEN_TOOLS = frozenset({"send_api_message", "post_slack_message", "todo_read"
 # The argument that says what a call was about, in order of preference.
 _DETAIL_KEYS = (
     "query", "sql", "search_query", "pattern", "path", "file_path", "unique_id", "model_name", "task", "agent",
+    "table_name", "dataset_name", "schema_name", "database_name",
 )
 # Inputs arrive cut at maxChars, so read the value with a regex, not json.loads.
 _DETAIL = re.compile(r'"(%s)"\s*:\s*"((?:[^"\\]|\\.)*)' % "|".join(_DETAIL_KEYS))

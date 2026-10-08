@@ -1,4 +1,4 @@
 streamlit>=1.65
-paradime-io>=6.7
+paradime-io>=6.8
 altair>=6.0
 pandas>=2.2

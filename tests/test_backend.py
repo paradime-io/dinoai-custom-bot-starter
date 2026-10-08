@@ -48,8 +48,8 @@ def test_paradime_backend_drives_the_sdk(paradime):
     run = backend.get("s1")
     assert calls[0]["agent"] == "stakeholder-analyst" and calls[0]["message"] == "q1"
     assert calls[1] == {"id": "s1", "message": "q2"}
-    # A status this app does not know must keep it polling.
-    assert run.status == "WAITING" and not run.terminal
+    # The SDK maps a status it does not know to UNKNOWN, which must keep the app polling.
+    assert run.status == "UNKNOWN" and not run.terminal
     assert run.messages[0].ts == 1791362175.55 and run.messages[0].from_agent
 
 
@@ -119,6 +119,7 @@ def test_roles_other_than_the_agent_are_not_answers():
 
 
 STEPS_RUN = {
+    "ok": True,
     "status": "RUNNING",
     "messages": [],
     "childSessionIds": [],
@@ -137,6 +138,26 @@ def test_steps_and_the_startup_checklist_come_back_when_the_api_has_them(paradim
     run = backend.get("s1")
     assert [(s.index, s.role, s.tool_name) for s in run.steps] == [(0, "user", None), (1, "tool", "run_sql_query")]
     assert run.startup[0].label == "Starting the agent" and run.startup[0].done
+
+
+def test_a_turn_reads_only_its_own_steps_and_the_watcher_none(paradime, monkeypatch):
+    backend, _ = paradime
+    sent = []
+
+    def answer(query, variables={}):
+        sent.append(("steps(" in query, dict(variables)))
+        return {"dinoaiAgentRun": STEPS_RUN}
+
+    monkeypatch.setattr(backend._client, "_call_gql", answer)
+    backend.get("s1", steps_after=5)
+    backend.get("s1", steps_after=-1)  # a first turn: no baseline yet
+    backend.get("s1", with_steps=False)
+
+    assert sent == [
+        (True, {"id": "s1", "includeToolIo": True, "after": 5, "maxChars": 400}),
+        (True, {"id": "s1", "includeToolIo": True, "maxChars": 400}),
+        (False, {"id": "s1"}),
+    ]
 
 
 def test_an_api_without_steps_falls_back_to_the_plain_run_once(paradime, monkeypatch):

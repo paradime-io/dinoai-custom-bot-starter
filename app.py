@@ -244,7 +244,7 @@ def open_thread(backend: AgentBackend) -> None:
         # Not saved on this server: rebuild what the agent session still holds.
         try:
             with st.spinner("Opening the conversation…"):
-                run = backend.get(thread)
+                run = backend.get(thread, with_steps=False)
         except BackendError:
             st.query_params.clear()
             st.toast("That conversation link has expired.")
@@ -303,15 +303,22 @@ def wait_for_turn(backend: AgentBackend, turn: PendingTurn, box: Any) -> dict[st
 
     The Paradime API has no push channel: messages arrive whole, so polling
     often is the only way to show them sooner. One poll is one ~0.3 s request.
+
+    The box itself changes only when the turn ends. Each update of a status box
+    sends its expanded state again, so updating its label every second closed
+    the box again right after a reader opened it. The steps go into a list
+    inside the box, and a live line under them shows the timer.
     """
     poll = float(setting("ANALYST_POLL_SECONDS", 1.0))
     what = "report" if turn.kind == "report" else "question"
+    step_list = box.container()  # one line for each step, as they come
+    live = box.empty()  # the current activity and the timer
     shown, failures = 0, 0
     lines: list[str] = []  # one per step, for APIs that expose the agent's steps
     shown_steps: set[int] = set()
     while True:
         try:
-            snapshot = backend.get(turn.session_id)
+            snapshot = backend.get(turn.session_id, steps_after=turn.step_baseline)  # this turn's steps only
             failures = 0
         except BackendError as exc:
             failures += 1
@@ -329,13 +336,14 @@ def wait_for_turn(backend: AgentBackend, turn: PendingTurn, box: Any) -> dict[st
                 line = describe(step)
                 if line:
                     lines.append(line)
-                    box.markdown(f"- {escape_dollars(line)}")
+                    step_list.markdown(f"- {escape_dollars(line)}")
         if not lines:  # no steps from this API: show the agent's own messages
             for message in messages[shown:]:
-                box.markdown(preview(message.content))
+                step_list.markdown(preview(message.content))
         shown = len(messages)
         elapsed = _clock(now - turn.sent_at)
         if done:
+            live.empty()
             total = len(snapshot.messages)
             callback = None
             if waiting_report(st.session_state.history) is not None:
@@ -366,7 +374,7 @@ def wait_for_turn(backend: AgentBackend, turn: PendingTurn, box: Any) -> dict[st
             return item
         pending_startup = [s.label for s in snapshot.startup if not s.done]
         if lines:
-            label = lines[-1]  # the latest tool call
+            label = f"{len(lines)} step{'s' if len(lines) != 1 else ''} so far"  # listed above
         elif snapshot.status == "QUEUED" and pending_startup:
             label = pending_startup[0]  # the pod's start-up checklist
         elif messages and not snapshot.terminal:
@@ -375,7 +383,7 @@ def wait_for_turn(backend: AgentBackend, turn: PendingTurn, box: Any) -> dict[st
             label = STATUS_LABELS.get(snapshot.status, "DinoAI is working")
         if snapshot.terminal:  # a follow-up that the run has not picked up, or is settling
             label = "Finishing up" if messages else f"Sending your {what} to DinoAI"
-        box.update(label=f"{label} · {elapsed}")
+        live.caption(f"{escape_dollars(label)} · {elapsed}")
         time.sleep(poll)
 
 
@@ -589,7 +597,7 @@ def issue_watcher(backend: AgentBackend) -> None:
         return
     label = "The data team's agent is filing a Linear issue"
     try:
-        snapshot = backend.get(session_id)
+        snapshot = backend.get(session_id, with_steps=False)  # the watcher needs messages only
     except BackendError as exc:
         log.warning("Could not check %s for the issue link: %s", session_id, exc)
     else:
@@ -768,7 +776,7 @@ def chat_page() -> None:
         with st.chat_message("user", avatar=USER_AVATAR):
             st.markdown(escape_dollars(question))
         with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-            box = st.status("Sending your question to DinoAI", expanded=False)
+            box = st.status("DinoAI is working on your question", expanded=True)
             try:
                 pending = st.session_state.pending = start_turn(backend, question, history)
             except BackendError as exc:
@@ -779,9 +787,9 @@ def chat_page() -> None:
             save_thread()
             finish_turn(backend, pending, box)
     elif pending is not None:  # a report, or a turn that a reload, a restart or a click interrupted
-        label = "Passing your report to DinoAI" if pending.kind == "report" else STATUS_LABELS["RUNNING"]
+        label = "Passing your report to DinoAI" if pending.kind == "report" else "DinoAI is working on your question"
         with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-            finish_turn(backend, pending, st.status(label, expanded=False))
+            finish_turn(backend, pending, st.status(label, expanded=True))
 
 
 def finish_turn(backend: AgentBackend, pending: PendingTurn, box: Any) -> None:

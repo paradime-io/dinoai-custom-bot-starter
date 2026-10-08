@@ -28,7 +28,7 @@ sequenceDiagram
 - **The agent pod is not permanent.** The Paradime docs say it stays alive for up to 24 hours after the last message, and 48 hours in total. Some runtimes use shorter limits: on the AgentCore runtime, the backend sets 25 minutes without activity and about 8 hours in total. If Paradime refuses a follow-up, the chat shows a notice, and the question starts a new session that gets a summary of the conversation so far.
 - **The API returns Markdown messages only.** So visuals travel inside the message, as fenced `viz` blocks that hold one JSON object each (see [The response contract](#the-response-contract)).
 - **The app sends the response contract at the start of each session.** The agent definition only says who the agent is and which tools it can use.
-- **The app polls the run every second** (`ANALYST_POLL_SECONDS`). While the agent works, the status line shows the agent's latest step and a timer. The last message of the turn is the answer.
+- **The app polls the run every second** (`ANALYST_POLL_SECONDS`). While the agent works, the status box lists the agent's steps as they come, with a timer (see [Live tool calls](#live-tool-calls)). The last message of the turn is the answer.
 
 ## The response contract
 
@@ -94,7 +94,7 @@ To make answers faster, change the agent, not the frontend:
 
 ### Live tool calls
 
-The Paradime app shows the agent's tool calls while it works. The external API's `dinoaiAgentRun.messages` holds only what the agent delivered with `send_api_message`. Newer Paradime releases add two opt-in fields to `DinoAiAgentRun`, which not every environment has yet:
+The Paradime app shows the agent's tool calls while it works, and so does this app. `dinoaiAgentRun.messages` holds only what the agent delivered with `send_api_message`, but the run also has two opt-in fields:
 
 ```graphql
 steps(after: Int, includeToolIo: Boolean = false, maxChars: Int = 2000): [DinoAiAgentStep!]
@@ -102,7 +102,24 @@ steps(after: Int, includeToolIo: Boolean = false, maxChars: Int = 2000): [DinoAi
 startupSteps: [DinoAiAgentStartupStep!]   # the pod start-up checklist: { label, done }
 ```
 
-The app already asks for these fields. It shows one line for each step ("Ran a SQL query: SELECT race_year, …") and the start-up checklist while the pod starts. On an API without the fields, the first read is refused, and the app uses the plain query from then on. Until the change is deployed, the contract asks the agent to post a short line before each tool call.
+The app reads them with the Python SDK, paradime-io 6.8 or later:
+
+```python
+run = client.dinoai_agents.get_run(
+    agent_session_id=session_id,
+    include_steps=True,
+    include_tool_io=True,    # the input of each tool call: the SQL, the search, the model
+    max_chars=400,           # each step's text is capped
+    steps_after=baseline,    # only this turn's steps
+)
+run.steps            # [DinoaiAgentStep(index, role, tool_name, tool_input, content, truncated)]
+run.startup_steps    # [DinoaiAgentStartupStep(label, done)]
+```
+
+- **One line for each step.** While the agent works, its turn's status box lists each step, for example "Searched the data catalog: race results" or "Ran a SQL query: SELECT constructor_name, …", with the agent's own notes in between. While the pod starts, the box shows the start-up checklist ("Spinning up environment", "Cloning repository"). `analyst/steps.py` turns a step into a line, and hides plumbing such as `send_api_message`.
+- **Only the turn's own steps.** Each read asks only for the steps after the turn's baseline (`steps_after`), so a long conversation does not send its whole history on every poll. Reads that need only the messages (the report watcher) skip the steps.
+- **Tool inputs, not outputs.** Tool inputs and outputs can hold query results, so the app asks for them capped at 400 characters, and shows only the inputs.
+- **Fallback.** On a Paradime environment without these fields, the first read is refused, and the app reads the plain run from then on. The status box then shows a timer and the agent's own progress messages: the contract asks the agent to post a short line before each tool call.
 
 ## History and sharing
 

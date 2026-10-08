@@ -86,8 +86,14 @@ class AgentBackend(Protocol):
         """Post a follow-up message to an existing session."""
         ...
 
-    def get(self, session_id: str) -> RunSnapshot:
-        """Read the session's status and full transcript."""
+    def get(
+        self, session_id: str, *, steps_after: int | None = None, with_steps: bool = True
+    ) -> RunSnapshot:
+        """Read the session's status, its messages and (where the API has them) its steps.
+
+        `steps_after` keeps only the steps after that index: a turn needs only its
+        own. `with_steps=False` skips them, for reads that need messages only.
+        """
         ...
 
 
@@ -107,20 +113,8 @@ class ParadimeBackend:
         }
     """
 
-    # The run with its tool-call steps and start-up checklist. The SDK does not
-    # read these yet, and older APIs reject them, so `get` falls back to the SDK.
-    # Tool output is capped small: the app only shows each step's input.
-    _RUN_WITH_STEPS = """
-        query DinoaiAgentRun($id: String!) {
-            dinoaiAgentRun(agentSessionId: $id) {
-                status
-                messages { ts role content }
-                childSessionIds
-                steps(includeToolIo: true, maxChars: 400) { index role toolName toolInput content }
-                startupSteps { label done }
-            }
-        }
-    """
+    # Each step's text is capped: the app shows one line for each step.
+    STEP_MAX_CHARS = 400
 
     def __init__(
         self,
@@ -182,28 +176,33 @@ class ParadimeBackend:
         if not result.ok:
             raise BackendError("Paradime did not accept the follow-up message.")
 
-    def get(self, session_id: str) -> RunSnapshot:
-        if self._steps_supported is not False:
+    @property
+    def steps_supported(self) -> bool | None:
+        """Whether this API serves the agent's steps: None until a read has told."""
+        return self._steps_supported
+
+    def get(
+        self, session_id: str, *, steps_after: int | None = None, with_steps: bool = True
+    ) -> RunSnapshot:
+        agents = self._client.dinoai_agents
+        if with_steps and self._steps_supported is not False:
             try:
-                data = self._call(
-                    self._client._call_gql, query=self._RUN_WITH_STEPS, variables={"id": session_id}
+                run = self._call(
+                    agents.get_run,
+                    agent_session_id=session_id,
+                    include_steps=True,
+                    include_tool_io=True,  # the input of each tool call: the SQL, the search, the model
+                    max_chars=self.STEP_MAX_CHARS,
+                    steps_after=steps_after if steps_after is not None and steps_after >= 0 else None,
                 )
             except BackendError as exc:
                 if "Cannot query field" not in str(exc):
                     raise
-                self._steps_supported = False  # an API without `steps`: use the plain run
+                self._steps_supported = False  # an API without steps: read the plain run from now on
             else:
                 self._steps_supported = True
-                return _snapshot(data["dinoaiAgentRun"])
-        run = self._call(self._client.dinoai_agents.get_run, agent_session_id=session_id)
-        return RunSnapshot(
-            status=run.status.value,
-            messages=[
-                AgentMessage(ts=_to_float(m.ts), role=m.role, content=m.content)
-                for m in run.messages
-            ],
-            child_session_ids=list(run.child_session_ids),
-        )
+                return _snapshot(run)
+        return _snapshot(self._call(agents.get_run, agent_session_id=session_id))
 
     @staticmethod
     def _call(method, **kwargs):
@@ -223,25 +222,25 @@ class ParadimeBackend:
             raise BackendError(str(exc)) from exc
 
 
-def _snapshot(run: dict) -> RunSnapshot:
+def _snapshot(run) -> RunSnapshot:
+    """The SDK's run (paradime-io 6.8 or later), in the app's own types."""
     return RunSnapshot(
-        status=str(run["status"]).upper(),
+        status=str(run.status.value).upper(),
         messages=[
-            AgentMessage(ts=_to_float(m["ts"]), role=m["role"], content=m["content"])
-            for m in run["messages"]
+            AgentMessage(ts=_to_float(m.ts), role=m.role, content=m.content) for m in run.messages
         ],
-        child_session_ids=list(run.get("childSessionIds") or []),
+        child_session_ids=list(run.child_session_ids or []),
         steps=[
             AgentStep(
-                index=s["index"],
-                role=str(s["role"]).lower(),
-                tool_name=s.get("toolName"),
-                tool_input=s.get("toolInput"),
-                content=s.get("content"),
+                index=s.index,
+                role=str(s.role).lower(),  # the API sends USER, AGENT and TOOL
+                tool_name=s.tool_name,
+                tool_input=s.tool_input,
+                content=s.content,
             )
-            for s in run.get("steps") or []
+            for s in run.steps or []
         ],
-        startup=[StartupStep(label=s["label"], done=s["done"]) for s in run.get("startupSteps") or []],
+        startup=[StartupStep(label=s.label, done=s.done) for s in run.startup_steps or []],
     )
 
 
@@ -321,7 +320,9 @@ class ReplayBackend:
             raise BackendError(f"Unknown replay session {session_id}.")
         self._schedule(session_id, message)
 
-    def get(self, session_id: str) -> RunSnapshot:
+    def get(
+        self, session_id: str, *, steps_after: int | None = None, with_steps: bool = True
+    ) -> RunSnapshot:
         session = self._sessions.get(session_id)
         if session is None:
             raise BackendError(f"Unknown replay session {session_id}.")
