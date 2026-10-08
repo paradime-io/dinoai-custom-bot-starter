@@ -5,9 +5,10 @@
 # reports the issue back with notify_parent_session.
 #
 # Before you deploy it:
-#   - Connect Linear for agents: set LINEAR_API_KEY in Settings > Workspace Settings >
-#     Environment Variables > DinoAI Background Agent. The Linear tools below use that key,
-#     and agents get them only when it is set.
+#   - Connect Linear for agents: set LINEAR_API_KEY on the Agent tab of the environment
+#     variables, for the agent environment that this agent runs in (the workspace's default
+#     agent environment unless you chose one). The Linear tools below use that key, and the
+#     agent gets them only when its session can see it.
 #   - Assigning the issue to a person needs a Paradime release in which the Linear
 #     tools accept assignee_email. Before that, the issue is created unassigned.
 # Deploy it like stakeholder-analyst.yml: as .dinoai/agents/analytics-feedback.yml on the
@@ -30,6 +31,10 @@ backstory: >
   the question, the answer, the SQL of each visual, the models used, what the analyst
   checked, a Linear team key, maybe an assignee email, a conversation link and a DinoAI
   session id. Nobody can answer questions, so do not ask any. Work in this order.
+  0. Check that your tools include list_linear_issues and create_linear_issue. If they
+  do not, do not look for another way to reach Linear: call notify_parent_session at once
+  with "Could not file the issue: this agent has no Linear tools. Set LINEAR_API_KEY in
+  the variables of the agent environment that the feedback agent runs in.", and stop.
   1. Look for a duplicate: list the open issues in the team (list_linear_issues) and look
   for one about the same question or visual. If there is one, add the new report to it as
   a comment (add_linear_comment) instead of creating an issue.

@@ -143,10 +143,10 @@ Source: [YAML configuration](https://docs.paradime.io/products/dino-ai/programma
 The agents' Linear tools authenticate with a Linear API key that you store as an **agent environment variable**. The tools are available to agents only when this variable is set.
 
 1. In Linear, go to **Settings** → **Security & access** → **Personal API keys** → **Create new API key**. Create it as a user that can create issues in the target team. A dedicated bot user makes the issues' author clear.
-2. In Paradime, go to **Settings** → **Workspace Settings** → **Environment Variables**. In the **DinoAI Background Agent** (Agent) section, select **Add New**.
+2. In Paradime, go to **Settings** → **Workspace Settings** → **Environment Variables**, open the **Agent** tab, and select **Add New**. If the workspace has more than one agent environment, add it for the environment that the feedback agent runs in: the workspace's default agent environment, unless you selected one in the agent's **Environment** field.
 3. Add the variable `LINEAR_API_KEY` with the Linear key as its value.
 
-Agent environment variables are separate from the Bolt and Code IDE variables: agents see only this section.
+An agent session sees the workspace's default variables plus the variables of its own agent environment, and it gets the Linear tools only when it can see `LINEAR_API_KEY`. Agent variables are separate from the Bolt and Code IDE variables. To check this step, run `python scripts/smoke_test.py --report` ([testing.md](testing.md#4-live-report)): it creates a real issue.
 
 Source: [DinoAI background agent environment variables](https://docs.paradime.io/products/settings/environment-variables/dinoai-background-agent-environment-variables) in the Paradime docs. The variable name comes from the backend code of the agents' Linear tools (`is_linear_connected` reads `LINEAR_API_KEY`); the docs do not list it yet.
 
@@ -244,4 +244,4 @@ And in Paradime:
 
 | Name | Where | Used by |
 | - | - | - |
-| `LINEAR_API_KEY` | Settings → Workspace Settings → Environment Variables → DinoAI Background Agent | The agents' Linear tools (the feedback agent) |
+| `LINEAR_API_KEY` | Settings → Workspace Settings → Environment Variables → Agent tab, for the feedback agent's agent environment | The agents' Linear tools (the feedback agent) |

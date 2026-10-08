@@ -64,6 +64,13 @@ The app sends the format in the first message of each session. If the agent igno
 
 In live mode, the button needs `DINOAI_AGENT`. The report goes through the analyst agent's squad, and the workspace's default agent has no squad. Set `DINOAI_AGENT` to the analyst's slug. The button is also disabled while an answer is in progress.
 
+### The analyst says the issue "could not be filed": the feedback agent has no Linear tools
+
+Open the feedback agent's session in Paradime. If its tools do not include `list_linear_issues` and `create_linear_issue`, the session could not see `LINEAR_API_KEY`. Paradime gives an agent the Linear tools only when the key is among the variables of the agent environment that its session runs in: the workspace's default variables, plus that environment's own. Since a Paradime release in October 2026, agent variables belong to agent environments, so a key that worked before can be missing after the release.
+
+1. Add `LINEAR_API_KEY` on the **Agent** tab of the environment variables, for the agent environment that the feedback agent uses (see [setup.md, step 4](setup.md#step-4-connect-linear-for-the-agents)).
+2. Run `python scripts/smoke_test.py --report`, or report a problem in the app again.
+
 ### The analyst acknowledges the report, but no issue link comes
 
 Open the analyst's session in Paradime and look for a child session (the feedback agent's run). `scripts/smoke_test.py --report` prints its ID.
