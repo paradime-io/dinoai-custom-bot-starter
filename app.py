@@ -498,7 +498,10 @@ def _report_status(report: dict[str, Any]) -> str:
 def report_dialog(backend: AgentBackend, index: int) -> None:
     if st.session_state.pop(REPORT_SENT, False):
         st.rerun()  # close the dialog: the chat shows the report and waits for DinoAI
-    history = st.session_state.history
+    history = _open_answer(index)
+    if history is None:
+        st.info("This conversation is no longer open. Close this window.", icon=":material/info:")
+        return
     question, _, _ = answer_context(history, index)
     _, team, assignee = feedback_route()
     key = _report_key(history, index)
@@ -531,13 +534,28 @@ def report_dialog(backend: AgentBackend, index: int) -> None:
     )
 
 
+def _open_answer(index: int) -> list[dict[str, Any]] | None:
+    """The open conversation, if it still has the answer at ``index``.
+
+    Dialogs and callbacks can run after the conversation was cleared or switched.
+    """
+    history = st.session_state.get("history")
+    if not history or index >= len(history) or history[index].get("role") != "assistant":
+        return None
+    return history
+
+
 def _report_key(history: list[dict[str, Any]], index: int) -> str:
     return f"{history[index]['session_id']}-{index}"
 
 
 def _send_clicked(backend: AgentBackend, index: int) -> None:
     """The dialog's send button. A callback, so it runs before the dialog reruns."""
-    key = _report_key(st.session_state.history, index)
+    history = _open_answer(index)
+    if history is None or not st.session_state.get("session_id"):
+        st.session_state[REPORT_ERROR] = "This conversation is no longer open."
+        return
+    key = _report_key(history, index)
     category = st.session_state.get(f"{key}-report-category")
     if not category:
         return
@@ -589,9 +607,14 @@ def send_report(backend: AgentBackend, index: int, category: str, comment: str) 
 
 @st.fragment(run_every=WATCH_POLL_SECONDS)
 def issue_watcher(backend: AgentBackend) -> None:
-    """Wait for the issue link that the feedback agent's callback makes the analyst post."""
-    history = st.session_state.history
-    report = waiting_report(history)
+    """Wait for the issue link that the feedback agent's callback makes the analyst post.
+
+    A fragment's timed rerun runs only this function, not the page. If the
+    conversation was cleared since the page last ran (New conversation, another
+    thread, a reconnect after a restart), there is nothing to watch.
+    """
+    history = st.session_state.get("history")
+    report = waiting_report(history) if history else None
     session_id = st.session_state.get("session_id")
     if report is None or not session_id or st.session_state.get("pending") is not None:
         return
