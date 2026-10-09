@@ -23,7 +23,6 @@ import dataclasses
 import logging
 import os
 import time
-from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -72,7 +71,6 @@ STATUS_LABELS = {
     "RUNNING": "DinoAI is analysing your data",
 }
 HISTORY_PATH = "history"
-RECENT_KEY = "recent_thread"
 RECENT_IN_SIDEBAR = 8
 REPORT_SENT, REPORT_ERROR = "report_sent", "report_error"  # from the dialog's send callback
 WATCH_POLL_SECONDS = 3.0  # how often an open chat checks for the issue link of a report
@@ -179,18 +177,12 @@ def reset_conversation() -> None:
     st.query_params.clear()
 
 
-def switch_thread(session_id: str) -> None:
+def switch_thread(session_id: str, title: str | None = None) -> None:
     """Open another saved thread in place; open_thread loads it on the rerun."""
     reset_conversation()
     st.query_params["thread"] = session_id
-    st.session_state.opening = True  # show a loading state while it renders
-
-
-def _open_recent() -> None:
-    """A click in the recent list. Only a user's change calls this, never a rerun."""
-    choice = st.session_state.get(RECENT_KEY)
-    if choice and choice != st.session_state.get("session_id"):
-        switch_thread(choice)
+    # The chat page shows a loading state, with this title, until the thread is drawn.
+    st.session_state.opening = title or "the conversation"
 
 
 def save_thread() -> None:
@@ -722,22 +714,26 @@ def render_recent(current: str | None) -> None:
     threads = thread_store().list(limit=RECENT_IN_SIDEBAR)
     if not threads:
         return
-    recent = threads[:RECENT_IN_SIDEBAR]
-    ids = [t.session_id for t in recent]
-    titles = {t.session_id: _shorten(t.title, 60) for t in recent}
-    # Keyed: without a key, Streamlit rebuilds a widget whose options, order or
-    # captions changed ("3 min ago" changes every minute) as a new one, and a
-    # click made on the old one is lost. Its value always follows the open
-    # thread; only a user's click (on_change) switches threads.
-    st.session_state[RECENT_KEY] = current if current in ids else None
-    st.radio(
-        "Recent conversations",
-        ids,
-        index=None,
-        key=RECENT_KEY,
-        format_func=titles.__getitem__,
-        captions=[_thread_meta(t) for t in recent],
-        on_change=_open_recent,
+    st.caption("Recent conversations")
+    # One button for each thread: a click is a one-off trigger with its own callback.
+    # The radio this replaces had a value that each rerun reset to the open thread,
+    # so a click that landed during a rerun could be overwritten and lost.
+    with st.container(key="recent_threads", gap="small"):
+        for thread in threads[:RECENT_IN_SIDEBAR]:
+            active = thread.session_id == current
+            st.button(
+                _shorten(thread.title, 60),
+                key=f"thread-{thread.session_id}",
+                type="secondary" if active else "tertiary",  # the open thread has an outline
+                help=_thread_meta(thread),
+                width="stretch",
+                on_click=None if active else switch_thread,
+                args=None if active else (thread.session_id, thread.title),
+            )
+    # Left-align the titles, like a list (buttons center their labels).
+    st.html(
+        "<style>.st-key-recent_threads button {justify-content: flex-start; text-align: left;}"
+        " .st-key-recent_threads button p {text-align: left;}</style>"
     )
 
 
@@ -778,9 +774,25 @@ def chat_page() -> None:
     if not history and pending is None:
         with welcome.container():
             starter = render_welcome(starter_questions(backend))
-    opening = st.session_state.pop("opening", False)
-    with st.spinner("Opening the conversation…") if opening else nullcontext():
+    # After a click in the thread list, the old thread must go at once, and "Opening …"
+    # show until the new one is drawn; otherwise the old thread stays on screen, faded,
+    # while the new one renders. Streamlit merges updates to the same place before it
+    # sends them, so clearing a block and refilling it in one run never shows the empty
+    # state. Instead, each switch draws the thread in the other of two slots and clears
+    # the one it leaves; ordinary reruns keep the same slot, so nothing flickers.
+    opening = st.session_state.pop("opening", None)
+    if opening:
+        st.session_state.conversation_slot = 1 - st.session_state.get("conversation_slot", 0)
+    active = st.session_state.get("conversation_slot", 0)
+    slots = [st.empty(), st.empty()]
+    slots[1 - active].empty()
+    with slots[active].container():
+        loading = st.empty()
+        if opening:
+            with loading.container():
+                st.status(f"Opening “{_shorten(opening, 60)}”…", state="running")
         render_history(history, backend, reports_enabled(mode))
+        loading.empty()
     if pending is None and waiting_report(history) is not None:
         issue_watcher(backend)
 

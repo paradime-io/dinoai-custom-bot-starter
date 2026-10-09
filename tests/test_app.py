@@ -48,30 +48,34 @@ def _open(app: AppTest, thread: str) -> AppTest:
     return app.run()
 
 
+def _active_thread(app: AppTest) -> list:
+    """The thread buttons drawn as the open one (with an outline)."""
+    return [b.key for b in app.button if (b.key or "").startswith("thread-") and b.proto.type == "secondary"]
+
+
 def test_a_thread_link_opens_that_conversation(app):
     _open(app, "thread-a")
 
     assert not app.exception
     assert app.session_state["session_id"] == "thread-a"
-    assert app.radio(key="recent_thread").value == "thread-a"
+    assert _active_thread(app) == ["thread-thread-a"]
 
 
 def test_clicking_a_recent_conversation_opens_it(app):
     _open(app, "thread-a")
 
-    app.radio(key="recent_thread").set_value("thread-b").run()
+    app.button(key="thread-thread-b").click().run()
 
     assert app.session_state["session_id"] == "thread-b"
-    assert app.radio(key="recent_thread").value == "thread-b"
+    assert _active_thread(app) == ["thread-thread-b"]
     assert app.query_params["thread"] == "thread-b"
     assert any("Who won in 2018?" in m.value for m in app.markdown)
 
 
 def test_a_click_still_lands_after_the_list_changed(app, tmp_path):
-    """The flaky case: captions ("1 min ago") and order change between runs.
+    """The flaky case: the order and the "1 min ago" times change between runs.
 
-    An unkeyed radio becomes a new widget when its arguments change, and the
-    click made on the old one is dropped.
+    Each thread's button is keyed by its session, so a click lands whatever moved.
     """
     _open(app, "thread-a")
     data = (tmp_path / "thread-b.json").read_text()
@@ -79,9 +83,18 @@ def test_a_click_still_lands_after_the_list_changed(app, tmp_path):
     (tmp_path / "thread-b.json").write_text(data)  # thread-b moves to the top
     os.utime(tmp_path / "thread-b.json")
 
-    app.radio(key="recent_thread").set_value("thread-b").run()
+    app.button(key="thread-thread-b").click().run()
 
     assert app.session_state["session_id"] == "thread-b"
+
+
+def test_clicking_the_open_thread_keeps_it(app):
+    _open(app, "thread-a")
+
+    app.button(key="thread-thread-a").click().run()
+
+    assert app.session_state["session_id"] == "thread-a"
+    assert not app.exception
 
 
 def test_new_conversation_clears_the_thread_and_the_selection(app):
@@ -90,7 +103,7 @@ def test_new_conversation_clears_the_thread_and_the_selection(app):
     app.button(key="new_conversation").click().run()
 
     assert "session_id" not in app.session_state
-    assert app.radio(key="recent_thread").value is None
+    assert _active_thread(app) == []
     assert "thread" not in app.query_params
     # The selection must not pull the old thread back on the next run.
     app.run()
